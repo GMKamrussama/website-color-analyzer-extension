@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">🎨</div>
+            <h1>Color Assistant</h1>
+            <p>Extract website colors instantly</p>
+        </div>
+        
+        <div class="content">
+            <div class="info-box">
+                <span class="info-icon">ℹ️</span>
+                <span id="status-text">Ready to analyze! Click "Extract Colors" to capture the current website's color palette.</span>
+            </div>
+            
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Analyzing website colors...</p>
+            </div>
+            
+            <div id="results" class="results hidden">
+                <!-- Results will be inserted here -->
+            </div>
+            
+            <div id="error" class="error hidden">
+                <p>Error analyzing colors. Please try again.</p>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
+            <button id="extract-btn" class="btn btn-primary">Extract Colors</button>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>

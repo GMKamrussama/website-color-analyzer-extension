@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Website Color Analyzer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+      width: 100%;
+      background: #fff;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 4px;
+      color: #050038;
+    }
+    p {
+      font-size: 14px;
+      color: #555;
+    }
+    button {
+      margin: 20px 0;
+      padding: 10px 16px;
+      background-color: #050038;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+    }
+    .swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    .info {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Website Color Analyzer</h1>
+  <p>Click below to extract key colors from the current page.</p>
+  <button id="analyzeBtn">Analyze Colors</button>
+  <div id="result"></div>
+
+  <script>
+    document.getElementById("analyzeBtn").addEventListener("click", async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      chrome.tabs.sendMessage(tab.id, { action: "extractColors" }, (res) => {
+        const resultBox = document.getElementById("result");
+        resultBox.innerHTML = "";
+        for (const [label, val] of Object.entries(res)) {
+          const box = document.createElement("div");
+          box.className = "color-row";
+          box.innerHTML = `
+            <div class="swatch" style="background:${val.hex};"></div>
+            <div class="info">
+              <strong>${label.charAt(0).toUpperCase() + label.slice(1)} Color</strong><br/>
+              HEX: ${val.hex}<br/>
+              RGB: ${val.rgb}
+            </div>
+          `;
+          resultBox.appendChild(box);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
