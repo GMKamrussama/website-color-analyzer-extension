@@ -2,15 +2,40 @@
 // Color Analyzer Pro — Background Service Worker
 // ============================================================
 
+// Helper: Extract colors from raw HTML string inside service worker
+function extractColorsFromHtml(html) {
+  const set = new Set();
+  const colorRegex = /#[0-9a-fA-F]{3,8}|rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/gi;
+  let m;
+  while ((m = colorRegex.exec(html)) !== null) {
+    const c = m[0];
+    if (c.startsWith('#')) {
+      let hex = c.toLowerCase();
+      if (hex.length === 4) {
+        hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+      }
+      if (hex.length === 7) set.add(hex);
+    } else {
+      const rgb = c.match(/\d+/g);
+      if (rgb && rgb.length >= 3) {
+        const hex = '#' + [rgb[0], rgb[1], rgb[2]].map(v => parseInt(v, 10).toString(16).padStart(2, '0')).join('');
+        set.add(hex.toLowerCase());
+      }
+    }
+    if (set.size > 50) break;
+  }
+  return Array.from(set);
+}
+
+// Setup per-tab side panel behavior on installation and startup
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[ColorAnalyzerPro] Extension installed/updated (v1.0.0)');
 
-  // Configure side panel to open on action click
+  // Disable side panel globally by default so it never opens across all tabs automatically
+  await chrome.sidePanel.setOptions({ enabled: false }).catch(() => {});
   try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-  } catch (error) {
-    console.warn('[ColorAnalyzerPro] sidePanel.setPanelBehavior not supported:', error);
-  }
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+  } catch (e) {}
 
   // Create context menu
   chrome.contextMenus.removeAll(() => {
@@ -22,40 +47,96 @@ chrome.runtime.onInstalled.addListener(async () => {
   });
 });
 
-// Fallback action click listener if openPanelOnActionClick is not handled by browser
+chrome.runtime.onStartup.addListener(async () => {
+  // Ensure global side panel remains disabled on browser restart
+  await chrome.sidePanel.setOptions({ enabled: false }).catch(() => {});
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+  } catch (e) {}
+});
+
+// Open and toggle side panel ONLY on the specific tab where the user clicked it
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab || !tab.id) return;
+  const tabId = tab.id;
+
   try {
-    await chrome.sidePanel.open({ tabId: tab.id });
-  } catch (error) {
-    try {
-      await chrome.sidePanel.open({ windowId: tab.windowId });
-    } catch (err) {
-      console.error('[ColorAnalyzerPro] Error opening sidePanel:', err);
+    const { openTabs = {} } = await chrome.storage.session.get('openTabs');
+
+    if (openTabs[tabId]) {
+      // Already open on this tab -> Toggle close
+      delete openTabs[tabId];
+      await chrome.storage.session.set({ openTabs });
+      await chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+    } else {
+      // Enable and open strictly for this specific tab only
+      openTabs[tabId] = true;
+      await chrome.storage.session.set({ openTabs });
+      await chrome.sidePanel.setOptions({
+        tabId,
+        path: 'sidebar.html',
+        enabled: true
+      });
+      await chrome.sidePanel.open({ tabId });
     }
+  } catch (err) {
+    console.error('[ColorAnalyzerPro] Error toggling per-tab sidePanel:', err);
   }
 });
 
-// Context menu click
+// Context menu click: open exclusively on active tab
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'open-color-analyzer' && tab) {
+  if (info.menuItemId === 'open-color-analyzer' && tab && tab.id) {
+    const tabId = tab.id;
     try {
-      await chrome.sidePanel.open({ tabId: tab.id });
-    } catch (e) {
-      try {
-        await chrome.sidePanel.open({ windowId: tab.windowId });
-      } catch (err) {
-        console.error('[ColorAnalyzerPro] Error opening sidePanel from context menu:', err);
-      }
+      const { openTabs = {} } = await chrome.storage.session.get('openTabs');
+      openTabs[tabId] = true;
+      await chrome.storage.session.set({ openTabs });
+      await chrome.sidePanel.setOptions({
+        tabId,
+        path: 'sidebar.html',
+        enabled: true
+      });
+      await chrome.sidePanel.open({ tabId });
+    } catch (err) {
+      console.error('[ColorAnalyzerPro] Error opening per-tab sidePanel from context menu:', err);
     }
   }
 });
 
-// Message broker: relay messages between sidebar and content.js
+// Clean up tab state when tab is closed
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try {
+    const { openTabs = {} } = await chrome.storage.session.get('openTabs');
+    if (openTabs[tabId]) {
+      delete openTabs[tabId];
+      await chrome.storage.session.set({ openTabs });
+    }
+  } catch (e) {}
+});
+
+// Message broker: relay messages between sidebar and content.js, and background audit fetches
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PING') {
     sendResponse({ success: true, pong: true });
     return;
+  }
+
+  // Handle multi-page audit fetch in background service worker (prevents any window link-preload warnings)
+  if (message.type === 'AUDIT_FETCH_PAGE') {
+    fetch(message.url, {
+      headers: { 'Accept': 'text/html' },
+      cache: 'no-store'
+    })
+      .then(res => res.text())
+      .then(html => {
+        const colors = extractColorsFromHtml(html);
+        sendResponse({ success: true, colors });
+      })
+      .catch(err => {
+        sendResponse({ success: false, error: err.message, colors: [] });
+      });
+    return true; // Keep message channel open for async response
   }
 
   // Handle tab reload request from sidebar

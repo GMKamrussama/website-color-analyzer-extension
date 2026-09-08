@@ -406,22 +406,17 @@ async function startMultiPageAudit() {
     for (const url of links) {
       $('audit-loading-text').textContent = `Analyzing ${new URL(url).pathname}...`;
       try {
-        const resp = await fetch(url);
-        const html = await resp.text();
-        
-        // Extract colors directly from HTML string without DOMParser
-        // This avoids creating documents that trigger browser link-preload warnings
-        const foundColors = new Set();
-        const colorRegex = /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)/gi;
-        let m;
-        while ((m = colorRegex.exec(html)) !== null) {
-          const hex = colorToHex(m[0]);
-          if (hex) foundColors.add(hex.toLowerCase());
-          if (foundColors.size > 50) break;
-        }
+        const resp = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({
+            type: 'AUDIT_FETCH_PAGE',
+            url: url
+          }, (response) => {
+            resolve(response || { success: false, colors: [] });
+          });
+        });
 
         // Calculate overlap with main palette
-        const subPalette = Array.from(foundColors);
+        const subPalette = resp?.colors || [];
         const overlap = subPalette.filter(c => mainPalette.some(m => contrastRatio(c, m) < 1.1));
         const score = Math.min(100, Math.round((overlap.length / Math.max(1, subPalette.length)) * 150));
         
