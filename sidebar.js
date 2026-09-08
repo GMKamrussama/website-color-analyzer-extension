@@ -1216,6 +1216,33 @@ async function init() {
 
   $('start-audit-btn').addEventListener('click', startMultiPageAudit);
 
+  $('close-panel-btn')?.addEventListener('click', () => {
+    sendToContent('REMOVE_HIGHLIGHT');
+    window.close();
+  });
+
+  // Track the tab this side panel was opened for
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs[0]) {
+      state.openedTabId = tabs[0].id;
+    }
+  });
+
+  // Automatically close side panel if user switches to a different tab
+  // This guarantees the side panel only stays open on the tab where it was opened!
+  chrome.tabs.onActivated.addListener(({ tabId }) => {
+    if (state.openedTabId && tabId !== state.openedTabId) {
+      sendToContent('REMOVE_HIGHLIGHT');
+      window.close();
+    }
+  });
+
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    if (tabId === state.openedTabId) {
+      window.close();
+    }
+  });
+
   $('color-search').addEventListener('input', e => applySearch(e.target.value));
 
   setSiteBar('Ready to scan', '');
@@ -1225,3 +1252,4 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+

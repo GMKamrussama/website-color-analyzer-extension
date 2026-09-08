@@ -27,34 +27,18 @@ function extractColorsFromHtml(html) {
   return Array.from(set);
 }
 
-// Enable side panel on a per-tab basis (prevents global persistence across all tabs)
-function configureTabSidePanel(tabId, url) {
-  if (!tabId) return;
-  if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('edge://') || url.startsWith('about:')) {
-    chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
-  } else {
-    chrome.sidePanel.setOptions({ tabId, path: 'sidebar.html', enabled: true }).catch(() => {});
-  }
-}
+// 1. Enable openPanelOnActionClick so Chrome natively opens the side panel when the toolbar action icon is clicked!
+// This is the official, 100% reliable Chrome standard that never fails user gesture checks.
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error('[ColorAnalyzerPro] Error setting panel behavior:', error));
 
-// On install & startup:
-// 1. Enable openPanelOnActionClick so Chrome natively opens the side panel on toolbar click
-// 2. Set per-tab options so the side panel is scoped only to individual tabs
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[ColorAnalyzerPro] Extension installed/updated (v1.0.0)');
 
   chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error(error));
-
-  // Initialize side panel options on all existing tabs
-  chrome.tabs.query({}, (tabs) => {
-    for (const tab of tabs) {
-      if (tab.id && tab.url) {
-        configureTabSidePanel(tab.id, tab.url);
-      }
-    }
-  });
 
   // Create context menu
   chrome.contextMenus.removeAll(() => {
@@ -66,42 +50,11 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error) => console.error(error));
-
-  chrome.tabs.query({}, (tabs) => {
-    for (const tab of tabs) {
-      if (tab.id && tab.url) {
-        configureTabSidePanel(tab.id, tab.url);
-      }
-    }
-  });
-});
-
-// Update per-tab side panel configuration when tab navigates
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tab.url) {
-    configureTabSidePanel(tabId, tab.url);
-  }
-});
-
-// Update per-tab side panel configuration when switching active tabs
-chrome.tabs.onActivated.addListener(({ tabId }) => {
-  chrome.tabs.get(tabId, (tab) => {
-    if (chrome.runtime.lastError || !tab || !tab.url) return;
-    configureTabSidePanel(tab.id, tab.url);
-  });
-});
-
 // Context menu click: open side panel for active tab
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'open-color-analyzer' && tab && tab.id) {
-    chrome.sidePanel.setOptions({ tabId: tab.id, path: 'sidebar.html', enabled: true }).then(() => {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {
-        chrome.sidePanel.open({ windowId: tab.windowId }).catch(console.error);
-      });
+    chrome.sidePanel.open({ tabId: tab.id }).catch(() => {
+      chrome.sidePanel.open({ windowId: tab.windowId }).catch(console.error);
     });
   }
 });
