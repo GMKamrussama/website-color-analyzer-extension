@@ -27,18 +27,12 @@ function extractColorsFromHtml(html) {
   return Array.from(set);
 }
 
-// 1. Enable openPanelOnActionClick so Chrome natively opens the side panel when the toolbar action icon is clicked!
-// This is the official, 100% reliable Chrome standard that never fails user gesture checks.
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.error('[ColorAnalyzerPro] Error setting panel behavior:', error));
-
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[ColorAnalyzerPro] Extension installed/updated (v1.0.0)');
 
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error) => console.error(error));
+  // Disable panel globally for ALL tabs by default.
+  // It will only be enabled per-tab when the user clicks the action icon.
+  chrome.sidePanel.setOptions({ enabled: false }).catch(console.error);
 
   // Create context menu
   chrome.contextMenus.removeAll(() => {
@@ -48,6 +42,36 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ['page']
     });
   });
+});
+
+// Also disable globally when service worker starts (handles restarts)
+chrome.sidePanel.setOptions({ enabled: false }).catch(() => {});
+
+
+// Action icon click: enable + open panel ONLY for the specific tab clicked.
+// Step 1: setOptions enables the panel ONLY for this tab (other tabs stay disabled).
+// Step 2: open() shows the panel — called synchronously inside the gesture handler.
+// Both calls are fire-and-forget (no await) to preserve the user gesture context.
+chrome.action.onClicked.addListener((tab) => {
+  if (!tab || !tab.id) return;
+  const tabId = tab.id;
+
+  // Enable panel ONLY for this specific tab
+  chrome.sidePanel.setOptions({
+    tabId,
+    path: 'sidebar.html',
+    enabled: true
+  }).catch(console.error);
+
+  // Open the panel (synchronous call — user gesture is still valid)
+  chrome.sidePanel.open({ tabId }).catch((err) => {
+    console.error('[ColorAnalyzerPro] Error opening side panel:', err);
+  });
+});
+
+// When a tab is closed, disable its panel entry to keep state clean
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
 });
 
 // Context menu click: open side panel for active tab

@@ -1221,21 +1221,15 @@ async function init() {
     window.close();
   });
 
-  // Track the tab this side panel was opened for
+  // Track the tab this side panel was opened for (used for tab close detection)
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs && tabs[0]) {
       state.openedTabId = tabs[0].id;
     }
   });
 
-  // Automatically close side panel if user switches to a different tab
-  // This guarantees the side panel only stays open on the tab where it was opened!
-  chrome.tabs.onActivated.addListener(({ tabId }) => {
-    if (state.openedTabId && tabId !== state.openedTabId) {
-      sendToContent('REMOVE_HIGHLIGHT');
-      window.close();
-    }
-  });
+  // NOTE: Chrome's side panel is natively per-tab.
+  // It auto-hides when switching tabs and reappears when returning — no manual handling needed.
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     if (tabId === state.openedTabId) {
