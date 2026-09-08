@@ -45,3 +45,7 @@ __pycache__/
 *$py.class
 *.tmp
 *.log
+
+# Store Listing Drafts & Private Docs
+CHROMEWEBSTORE.md
+
