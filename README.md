@@ -115,12 +115,6 @@ Generate production-ready code in seconds:
 
 ---
 
-## 🔍 SEO Keywords & Topic Tags
-
-`chrome-extension` · `manifest-v3` · `color-picker` · `color-palette-extractor` · `wcag-accessibility` · `contrast-checker` · `tailwind-palette-generator` · `css-variables` · `oklch-color` · `design-systems` · `ui-ux-tools` · `front-end-development` · `web-design` · `website-color-scheme`
-
----
-
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome!
