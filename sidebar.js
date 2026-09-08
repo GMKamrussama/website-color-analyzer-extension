@@ -55,6 +55,29 @@ function getColorName(hex) {
 
 // ── Color Utilities ──────────────────────────────────────────
 
+function normalizeHex(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+  let clean = hex.toLowerCase().trim().replace('#', '');
+  if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+  if (clean.length !== 6) return null;
+  return '#' + clean;
+}
+
+function parseRgbString(str) {
+  if (!str || str === 'transparent' || str === 'none') return null;
+  const m = str.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
+  if (m) return { r: parseInt(m[1], 10), g: parseInt(m[2], 10), b: parseInt(m[3], 10) };
+  return null;
+}
+
+function colorToHex(colorStr) {
+  if (!colorStr || colorStr === 'transparent' || colorStr === 'rgba(0, 0, 0, 0)') return null;
+  const rgb = parseRgbString(colorStr);
+  if (rgb) return normalizeHex('#' + [rgb.r, rgb.g, rgb.b].map(v => v.toString(16).padStart(2, '0')).join(''));
+  if (/^#[0-9a-f]{3,8}$/i.test(colorStr)) return normalizeHex(colorStr);
+  return null;
+}
+
 function hexToRgb(hex) {
   const clean = hex.replace('#','');
   const n = parseInt(clean.length===3 ? clean.split('').map(c=>c+c).join('') : clean, 16);
@@ -385,18 +408,15 @@ async function startMultiPageAudit() {
       try {
         const resp = await fetch(url);
         const html = await resp.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
         
-        // Simple color extraction from external HTML (inline + style tags)
-        // This is a "light" version
+        // Extract colors directly from HTML string without DOMParser
+        // This avoids creating documents that trigger browser link-preload warnings
         const foundColors = new Set();
-        const bodyText = doc.body.innerHTML;
-        const colorRegex = /#[0-9a-f]{3,6}|rgba?\([^)]+\)/gi;
+        const colorRegex = /#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)/gi;
         let m;
-        while ((m = colorRegex.exec(bodyText)) !== null) {
-          const hex = m[0].startsWith('#') ? m[0] : '#cccccc'; // simplification
-          if (hex.length >= 4) foundColors.add(hex.toLowerCase());
+        while ((m = colorRegex.exec(html)) !== null) {
+          const hex = colorToHex(m[0]);
+          if (hex) foundColors.add(hex.toLowerCase());
           if (foundColors.size > 50) break;
         }
 
